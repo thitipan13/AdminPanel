@@ -2,7 +2,8 @@ import javax.swing.*;
 import javax.swing.plaf.FontUIResource;
 import java.awt.*;
 import java.awt.event.*;
-
+import java.text.*;
+import java.io.*;
 
 public class AdminPanelUI {
 
@@ -12,9 +13,9 @@ public class AdminPanelUI {
 	// องค์ประกอบ UI หลัก
 	private JFrame frame;                 // หน้าต่างหลัก
 	private int selectedYear = 2568;      // ปีที่เลือกอยู่ปัจจุบัน
-	private JTextField[] minIncomeFields = new JTextField[BRACKET_ROWS]; // คอลัมน์ช่วงเงินได้ (ต่ำสุด)
-	private JTextField[] maxIncomeFields = new JTextField[BRACKET_ROWS]; // คอลัมน์ช่วงเงินได้ (สูงสุด)
-	private JTextField[] rateFields = new JTextField[BRACKET_ROWS];      // คอลัมน์อัตราภาษี
+	private JFormattedTextField[] minIncomeFields = new JFormattedTextField[BRACKET_ROWS]; // คอลัมน์ช่วงเงินได้ (ต่ำสุด)
+	private JFormattedTextField[] maxIncomeFields = new JFormattedTextField[BRACKET_ROWS]; // คอลัมน์ช่วงเงินได้ (สูงสุด)
+	private JFormattedTextField[] rateFields = new JFormattedTextField[BRACKET_ROWS];      // คอลัมน์อัตราภาษี
 
 	public AdminPanelUI() {
 		// ตั้งค่าฟอนต์ระบบให้เป็น Tahoma ทั้งแอป
@@ -50,6 +51,13 @@ public class AdminPanelUI {
 		save.setFocusable(false);
 		save.setFont(save.getFont().deriveFont(Font.BOLD, 24f));
 		save.setBackground(new Color(255, 239, 204));
+
+		// เพิ่ม ActionListener สำหรับปุ่ม Save
+		save.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				saveToJSON();
+			}
+		});
 
 		panel.add(adminBadge, BorderLayout.WEST);
 		panel.add(save, BorderLayout.EAST);
@@ -130,7 +138,7 @@ public class AdminPanelUI {
 		for (int i = 0; i < BRACKET_ROWS; i++) {
 			gbc.weightx = 0.5;
 			gbc.gridx = 0; gbc.gridy = i + 1;
-			minIncomeFields[i] = new JTextField();
+			minIncomeFields[i] = new JFormattedTextField(NumberFormat.getIntegerInstance());
 			grid.add(minIncomeFields[i], gbc);
 
 			if (i != BRACKET_ROWS - 1) {
@@ -138,12 +146,12 @@ public class AdminPanelUI {
 				grid.add(new JLabel("—", SwingConstants.CENTER), gbc);
 
 				gbc.gridx = 2; gbc.gridy = i + 1; gbc.weightx = 0.5;
-				maxIncomeFields[i] = new JTextField();
+				maxIncomeFields[i] = new JFormattedTextField(NumberFormat.getIntegerInstance());
 				grid.add(maxIncomeFields[i], gbc);
 			}
 
 			gbc.gridx = 4; gbc.gridy = i + 1; gbc.weightx = 0.25;
-			rateFields[i] = new JTextField();
+			rateFields[i] = new JFormattedTextField(NumberFormat.getIntegerInstance());
 			grid.add(rateFields[i], gbc);
 		}
 
@@ -164,6 +172,69 @@ public class AdminPanelUI {
 		frame.repaint();
 	}
 
+	// บันทึกข้อมูลเป็นไฟล์ JSON
+	private void saveToJSON() {
+		try {
+			// สร้างข้อมูล JSON แบบง่าย
+			StringBuilder json = new StringBuilder();
+			json.append("{\n");
+			json.append("  \"year\": ").append(selectedYear).append(",\n");
+			json.append("  \"taxBrackets\": [\n");
+			
+			for (int i = 0; i < BRACKET_ROWS; i++) {
+				json.append("    {\n");
+				
+				// ดึงค่า min income
+				String minIncome = "0";
+				if (minIncomeFields[i].getValue() != null) {
+					minIncome = minIncomeFields[i].getValue().toString().replace(",", "");
+				}
+				json.append("      \"minIncome\": ").append(minIncome).append(",\n");
+				
+				// ดึงค่า max income (แถวสุดท้ายจะไม่มี max)
+				if (i < BRACKET_ROWS - 1 && maxIncomeFields[i] != null) {
+					String maxIncome = "0";
+					if (maxIncomeFields[i].getValue() != null) {
+						maxIncome = maxIncomeFields[i].getValue().toString().replace(",", "");
+					}
+					json.append("      \"maxIncome\": ").append(maxIncome).append(",\n");
+				} else {
+					json.append("      \"maxIncome\": null,\n");
+				}
+				
+				// ดึงค่า rate
+				String rate = "0";
+				if (rateFields[i].getValue() != null) {
+					rate = rateFields[i].getValue().toString().replace(",", "");
+				}
+				json.append("      \"rate\": ").append(rate).append("\n");
+				
+				json.append("    }");
+				if (i < BRACKET_ROWS - 1) {
+					json.append(",");
+				}
+				json.append("\n");
+			}
+			
+			json.append("  ]\n");
+			json.append("}\n");
+			
+			// บันทึกไฟล์
+			String filename = "tax_brackets_" + selectedYear + ".json";
+			FileWriter writer = new FileWriter(filename);
+			writer.write(json.toString());
+			writer.close();
+			
+			// แสดงข้อความสำเร็จ
+			JOptionPane.showMessageDialog(frame, "บันทึกข้อมูลสำเร็จ!\nไฟล์: " + filename, "บันทึกสำเร็จ", JOptionPane.INFORMATION_MESSAGE);
+				
+		} catch (Exception e) {
+			// แสดงข้อความผิดพลาด
+			JOptionPane.showMessageDialog(frame, "เกิดข้อผิดพลาด: " + e.getMessage(), "ข้อผิดพลาด", JOptionPane.ERROR_MESSAGE);
+			e.printStackTrace();
+		}
+	}
+
 	// ตั้งค่าฟอนต์เริ่มต้นของ Swing ทุกคอมโพเนนต์
 	private static void setGlobalFont(String fontName) {
 		java.util.Enumeration<?> keys = UIManager.getDefaults().keys();
@@ -178,6 +249,6 @@ public class AdminPanelUI {
 	}
 
 	public static void main(String[] args) {
-		SwingUtilities.invokeLater(AdminPanelUI::new);
+		new AdminPanelUI();
 	}
 }
