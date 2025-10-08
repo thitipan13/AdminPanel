@@ -11,8 +11,8 @@ public class AdminPanelUI {
 	private static final int BRACKET_ROWS = 8;
 
 	// องค์ประกอบ UI หลัก
-	private JFrame frame;                 // หน้าต่างหลัก
-	private int selectedYear = 2568;      // ปีที่เลือกอยู่ปัจจุบัน
+	private JFrame frame; 				// หน้าต่างหลัก
+	private int selectedYear = 2568; 	// ปีที่เลือกอยู่ปัจจุบัน
 	private JFormattedTextField[] minIncomeFields = new JFormattedTextField[BRACKET_ROWS]; // คอลัมน์ช่วงเงินได้ (ต่ำสุด)
 	private JFormattedTextField[] maxIncomeFields = new JFormattedTextField[BRACKET_ROWS]; // คอลัมน์ช่วงเงินได้ (สูงสุด)
 	private JFormattedTextField[] rateFields = new JFormattedTextField[BRACKET_ROWS];      // คอลัมน์อัตราภาษี
@@ -34,6 +34,9 @@ public class AdminPanelUI {
 
 		frame.setContentPane(root);
 		frame.setVisible(true);
+
+		// โหลดข้อมูลที่บันทึกไว้ของปีปัจจุบัน (ถ้ามี)
+		loadFromJSON(selectedYear);
 	}
 
 	// สร้างแถบบนของหน้าจอ (Badge Admin และปุ่ม Save)
@@ -129,11 +132,11 @@ public class AdminPanelUI {
 		gbc.fill = GridBagConstraints.HORIZONTAL;
 
 		gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.5;
-		grid.add(new JLabel("ช่วงเงินได้สุทธิ"), gbc);
+		grid.add(new JLabel("ช่วงเงินได้สุทธิ (บาท) เรียงจากน้อยไปมาก"), gbc);
 		gbc.gridx = 2; gbc.gridy = 0; gbc.weightx = 0.5;
 		grid.add(new JLabel(""), gbc);
 		gbc.gridx = 4; gbc.gridy = 0; gbc.weightx = 0.0;
-		grid.add(new JLabel("อัตราภาษี"), gbc);
+		grid.add(new JLabel("อัตราภาษี (%)"), gbc);
 
 		for (int i = 0; i < BRACKET_ROWS; i++) {
 			gbc.weightx = 0.5;
@@ -170,6 +173,9 @@ public class AdminPanelUI {
 		frame.setContentPane(root);
 		frame.revalidate();
 		frame.repaint();
+
+		// หลังจากสร้างฟอร์มใหม่แล้ว ให้โหลดข้อมูลของปีที่เลือก (ถ้ามี)
+		loadFromJSON(selectedYear);
 	}
 
 	// บันทึกข้อมูลเป็นไฟล์ JSON
@@ -232,6 +238,91 @@ public class AdminPanelUI {
 			// แสดงข้อความผิดพลาด
 			JOptionPane.showMessageDialog(frame, "เกิดข้อผิดพลาด: " + e.getMessage(), "ข้อผิดพลาด", JOptionPane.ERROR_MESSAGE);
 			e.printStackTrace();
+		}
+	}
+
+	// โหลดข้อมูลจากไฟล์ JSON และเติมลงในช่องกรอก
+	private void loadFromJSON(int year) {
+		String filename = "tax_brackets_" + year + ".json";
+		File file = new File(filename);
+		if (!file.exists()) {
+			return; // ไม่มีไฟล์ให้โหลด ก็ข้ามไป
+		}
+
+		BufferedReader reader = null;
+		try {
+			reader = new BufferedReader(new FileReader(file));
+			String line;
+			int rowIndex = 0;
+			Long pendingMin = null;
+			Long pendingMax = null; // เป็น null สำหรับแถวสุดท้าย
+			Long pendingRate = null;
+
+			while ((line = reader.readLine()) != null && rowIndex < BRACKET_ROWS) {
+				String trimmed = line.trim();
+				if (trimmed.startsWith("\"minIncome\"")) {
+					pendingMin = parseLongValue(trimmed);
+				} else if (trimmed.startsWith("\"maxIncome\"")) {
+					if (trimmed.contains("null")) {
+						pendingMax = null;
+					} else {
+						pendingMax = parseLongValue(trimmed);
+					}
+				} else if (trimmed.startsWith("\"rate\"")) {
+					pendingRate = parseLongValue(trimmed);
+
+					// ครบ 1 ชุดของแถวแล้ว ให้เติมค่าใส่ช่อง
+					if (pendingMin == null) pendingMin = 0L;
+					if (pendingRate == null) pendingRate = 0L;
+
+					if (rowIndex >= 0 && rowIndex < BRACKET_ROWS) {
+						if (minIncomeFields[rowIndex] != null) {
+							minIncomeFields[rowIndex].setValue(pendingMin);
+						}
+						// สำหรับแถวสุดท้ายจะไม่มี maxIncomeFields
+						if (rowIndex < BRACKET_ROWS - 1 && maxIncomeFields[rowIndex] != null) {
+							if (pendingMax == null) {
+								maxIncomeFields[rowIndex].setValue(null);
+							} else {
+								maxIncomeFields[rowIndex].setValue(pendingMax);
+							}
+						}
+						if (rateFields[rowIndex] != null) {
+							rateFields[rowIndex].setValue(pendingRate);
+						}
+					}
+
+					// เตรียมสำหรับชุดถัดไป
+					rowIndex++;
+					pendingMin = null;
+					pendingMax = null;
+					pendingRate = null;
+				}
+			}
+		} catch (Exception ex) {
+			// แสดงข้อความผิดพลาดแบบไม่รบกวนการใช้งานหลัก
+			System.err.println("โหลดไฟล์ไม่สำเร็จ: " + ex.getMessage());
+		} finally {
+			if (reader != null) {
+				try { reader.close(); } catch (IOException ignore) {}
+			}
+		}
+	}
+
+	// แปลงค่าตัวเลขจากบรรทัดรูปแบบ "\"key\": 123,"
+	private Long parseLongValue(String jsonLine) {
+		// ตัดส่วนก่อน ':' แล้วเอาเฉพาะตัวเลขจนจบ (ไม่รวม comma)
+		int colon = jsonLine.indexOf(':');
+		if (colon == -1) return 0L;
+		String after = jsonLine.substring(colon + 1).trim();
+		// ตัด comma ท้ายถ้ามี
+		if (after.endsWith(",")) {
+			after = after.substring(0, after.length() - 1).trim();
+		}
+		try {
+			return Long.parseLong(after);
+		} catch (NumberFormatException e) {
+			return 0L;
 		}
 	}
 

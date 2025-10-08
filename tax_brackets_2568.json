@@ -4,7 +4,7 @@
     {
       "minIncome": 0,
       "maxIncome": 150000,
-      "rate": 0
+      "rate": 5
     },
     {
       "minIncome": 150001,
