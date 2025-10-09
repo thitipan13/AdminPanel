@@ -9,7 +9,7 @@ import java.util.*;
 /**
  * AdminPanelUI - หน้าต่างแอดมินสำหรับจัดการข้อมูลภาษีแบบขั้นบันได
  */
-public class AdminPanelUI {
+public class APUI {
 
     // ค่าคงที่สำหรับการตั้งค่า
     private static final int BRACKET_ROWS = 8;           // จำนวนแถวในตารางภาษี
@@ -56,9 +56,9 @@ public class AdminPanelUI {
     /**
      * Constructor - สร้างและแสดงหน้าต่างโปรแกรม
      */
-    public AdminPanelUI() {
+    public APUI() {
         setupGlobalFont();                              // ตั้งค่าฟอนต์
-        loadAllDataFromFile();                          // โหลดข้อมูลจากไฟล์
+        loadAllDataFromFile();                          // โหลดข้อมูลจากไฟล์ก่อน
         createMainWindow();                             // สร้างหน้าต่างหลัก
         loadDataForYear(currentSelectedYear);           // แสดงข้อมูลปีปัจจุบัน
     }
@@ -340,7 +340,7 @@ public class AdminPanelUI {
      * โหลดข้อมูลของปีที่กำหนดมาแสดงในช่องกรอก
      */
     private void loadDataForYear(int year) {
-        System.out.println("Loading data for year: " + year); // debug output
+        System.out.println("Loading data for year: " + year);
         
         YearTaxData yearData = allYearsData.get(year);
         
@@ -388,7 +388,7 @@ public class AdminPanelUI {
             }
         }
         
-        // รีเฟรช UI
+        // รีเฟรช UI เพื่อให้แน่ใจว่าข้อมูลแสดงออกมา
         if (mainWindow != null) {
             mainWindow.revalidate();
             mainWindow.repaint();
@@ -483,6 +483,8 @@ public class AdminPanelUI {
         try (FileWriter writer = new FileWriter(DATA_FILE)) {
             writer.write(json.toString());
         }
+        
+        System.out.println("Data saved to file successfully: " + DATA_FILE);
     }
 
     /**
@@ -503,12 +505,12 @@ public class AdminPanelUI {
                 content.append(line).append("\n");
             }
             
-            System.out.println("Loading data from file..."); // debug output
+            System.out.println("==== เริ่มโหลดข้อมูลจากไฟล์ ====");
             
             // แยกข้อมูลของแต่ละปี
             parseJsonContent(content.toString());
             
-            System.out.println("Loaded data for " + allYearsData.size() + " years"); // debug output
+            System.out.println("==== โหลดข้อมูลสำเร็จ: " + allYearsData.size() + " ปี ====");
             
         } catch (Exception e) {
             System.err.println("เกิดข้อผิดพลาดในการโหลดไฟล์: " + e.getMessage());
@@ -517,79 +519,94 @@ public class AdminPanelUI {
     }
 
     /**
-     * แยกข้อมูล JSON
+     * แยกข้อมูล JSON - ปรับปรุงให้อ่านข้อมูลได้ถูกต้อง
      */
     private void parseJsonContent(String jsonContent) {
-        // การหาข้อความ
         String[] lines = jsonContent.split("\n");
         
         Integer currentYear = null;
         int bracketIndex = 0;
         YearTaxData currentYearData = null;
+        boolean inBracketObject = false;
         
         for (String line : lines) {
             String trimmed = line.trim();
             
-            // หาปี
-            if (trimmed.startsWith("\"") && trimmed.contains("\":")) {
+            // หาปี - ต้องเป็นตัวเลข 4 หลักและอยู่ใน format "YYYY": {
+            if (trimmed.matches("\"\\d{4}\":\\s*\\{")) {
                 try {
-                    String yearStr = trimmed.substring(1, trimmed.indexOf("\"", 1));
+                    // ดึงตัวเลขปีออกมา
+                    String yearStr = trimmed.substring(1, 5);
                     currentYear = Integer.parseInt(yearStr);
                     currentYearData = new YearTaxData(currentYear);
                     allYearsData.put(currentYear, currentYearData);
                     bracketIndex = 0;
-                } catch (NumberFormatException e) {
-                    // ไม่ใช่ปี ข้าม
+                    inBracketObject = false;
+                    System.out.println("พบข้อมูลปี: " + currentYear);
+                } catch (Exception e) {
+                    System.err.println("ไม่สามารถแยกปีได้จาก: " + trimmed);
                 }
             }
-            // หาข้อมูลในแต่ละ bracket
-            else if (currentYearData != null && bracketIndex < BRACKET_ROWS) {
+            // หาเครื่องหมายเปิด bracket object
+            else if (currentYearData != null && trimmed.equals("{") && bracketIndex < BRACKET_ROWS) {
+                inBracketObject = true;
+            }
+            // อ่านข้อมูลในแต่ละ bracket
+            else if (currentYearData != null && inBracketObject && bracketIndex < BRACKET_ROWS) {
                 if (trimmed.startsWith("\"minIncome\"")) {
-                    currentYearData.brackets[bracketIndex].minIncome = extractNumber(trimmed);
-                } else if (trimmed.startsWith("\"maxIncome\"")) {
-                    if (trimmed.contains("null")) {
-                        currentYearData.brackets[bracketIndex].maxIncome = null;
-                    } else {
-                        currentYearData.brackets[bracketIndex].maxIncome = extractNumber(trimmed);
-                    }
-                } else if (trimmed.startsWith("\"taxRate\"")) {
-                    currentYearData.brackets[bracketIndex].taxRate = (int) extractNumber(trimmed);
-                    bracketIndex++; // 1 bracket
+                    Long value = extractNumberOrNull(trimmed);
+                    currentYearData.brackets[bracketIndex].minIncome = value;
+                    System.out.println("  ปี " + currentYear + " แถวที่ " + bracketIndex + " minIncome = " + value);
+                } 
+                else if (trimmed.startsWith("\"maxIncome\"")) {
+                    Long value = extractNumberOrNull(trimmed);
+                    currentYearData.brackets[bracketIndex].maxIncome = value;
+                    System.out.println("  ปี " + currentYear + " แถวที่ " + bracketIndex + " maxIncome = " + value);
+                } 
+                else if (trimmed.startsWith("\"taxRate\"")) {
+                    Long value = extractNumberOrNull(trimmed);
+                    currentYearData.brackets[bracketIndex].taxRate = (value != null) ? value.intValue() : null;
+                    System.out.println("  ปี " + currentYear + " แถวที่ " + bracketIndex + " taxRate = " + currentYearData.brackets[bracketIndex].taxRate);
                 }
+            }
+            // หาเครื่องหมายปิด bracket object
+            else if (inBracketObject && (trimmed.equals("}") || trimmed.equals("},"))) {
+                inBracketObject = false;
+                bracketIndex++;
             }
         }
     }
 
     /**
-     * ดึงตัวเลขจากบรรทัด JSON
+     * ดึงตัวเลขจากบรรทัด JSON - คืนค่า null ถ้าเป็น null
      */
-    private long extractNumber(String jsonLine) {
+    private Long extractNumberOrNull(String jsonLine) {
         try {
             int colonIndex = jsonLine.indexOf(':');
-            if (colonIndex == -1) return 0;
+            if (colonIndex == -1) {
+                return null;
+            }
             
             String valueStr = jsonLine.substring(colonIndex + 1).trim();
             
-            // ลบ comma ท้ายบรรทัด
+            // ลบ comma ท้ายบรรทัดถ้ามี
             if (valueStr.endsWith(",")) {
                 valueStr = valueStr.substring(0, valueStr.length() - 1).trim();
             }
             
-            // ถ้าเป็น null ให้คืนค่า 0
+            // ถ้าเป็น null ให้คืนค่า null
             if (valueStr.equals("null")) {
-                return 0;
+                return null;
             }
             
             return Long.parseLong(valueStr);
         } catch (NumberFormatException e) {
-            System.err.println("Error extracting number from: " + jsonLine);
-            return 0;
+            System.err.println("ไม่สามารถแปลงตัวเลขได้จาก: " + jsonLine);
+            return null;
         }
     }
 
     public static void main(String[] args) {
-		
         new AdminPanelUI();
     }
-
 }
