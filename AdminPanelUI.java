@@ -4,342 +4,548 @@ import java.awt.*;
 import java.awt.event.*;
 import java.text.*;
 import java.io.*;
+import java.util.*;
 
+/**
+ * AdminPanelUI - หน้าต่างแอดมินสำหรับจัดการข้อมูลภาษีแบบขั้นบันได
+ */
 public class AdminPanelUI {
 
-	// จำนวนแถวช่วงเงินได้สุทธิที่จะแสดงในฟอร์มกลาง
-	private static final int BRACKET_ROWS = 8;
+    // ค่าคงที่สำหรับการตั้งค่า
+    private static final int BRACKET_ROWS = 8;           // จำนวนแถวในตารางภาษี
+    private static final String DATA_FILE = "tax_data.json";  // ชื่อไฟล์เก็บข้อมูล
 
-	// องค์ประกอบ UI หลัก
-	private JFrame frame; 				// หน้าต่างหลัก
-	private int selectedYear = 2568; 	// ปีที่เลือกอยู่ปัจจุบัน
-	private JFormattedTextField[] minIncomeFields = new JFormattedTextField[BRACKET_ROWS]; // คอลัมน์ช่วงเงินได้ (ต่ำสุด)
-	private JFormattedTextField[] maxIncomeFields = new JFormattedTextField[BRACKET_ROWS]; // คอลัมน์ช่วงเงินได้ (สูงสุด)
-	private JFormattedTextField[] rateFields = new JFormattedTextField[BRACKET_ROWS];      // คอลัมน์อัตราภาษี
+    // ตัวแปรสำหรับ UI หลัก
+    private JFrame mainWindow;                           // หน้าต่างหลัก
+    private int currentSelectedYear = 2568;              // ปีที่เลือกอยู่ในปัจจุบัน
+    
+    // ตัวแปรสำหรับช่องกรอกข้อมูลในตาราง
+    private JFormattedTextField[] minIncomeInputs = new JFormattedTextField[BRACKET_ROWS];
+    private JFormattedTextField[] maxIncomeInputs = new JFormattedTextField[BRACKET_ROWS];
+    private JFormattedTextField[] taxRateInputs = new JFormattedTextField[BRACKET_ROWS];
 
-	public AdminPanelUI() {
-		// ตั้งค่าฟอนต์ระบบให้เป็น Tahoma ทั้งแอป
-		setGlobalFont("Tahoma");
-		frame = new JFrame("Admin Panel - UI Preview");
-		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		frame.setSize(1200, 720);
-		frame.setLocationRelativeTo(null);
+    // ตัวแปรสำหรับเก็บข้อมูลทุกปี (เก็บในหน่วยความจำ)
+    private Map<Integer, YearTaxData> allYearsData = new HashMap<>();
 
-		// โครงหน้าจอหลัก: แถบบน (North) / ปีด้านซ้าย (West) / ฟอร์มกลาง (Center)
-		JPanel root = new JPanel(new BorderLayout());
-		root.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-		root.add(buildTopBar(), BorderLayout.NORTH);
-		root.add(buildLeftSidebar(), BorderLayout.WEST);
-		root.add(buildCenterPanel(), BorderLayout.CENTER);
+    /**
+     * คลาสสำหรับเก็บข้อมูลภาษีของแต่ละปี
+     */
+    private static class YearTaxData {
+        private int year;                               // ปี
+        private TaxBracket[] brackets;                  // ข้อมูลช่วงภาษี
 
-		frame.setContentPane(root);
-		frame.setVisible(true);
+        public YearTaxData(int year) {
+            this.year = year;
+            this.brackets = new TaxBracket[BRACKET_ROWS];
+            // สร้างช่วงภาษีเริ่มต้น (ค่าว่าง)
+            for (int i = 0; i < BRACKET_ROWS; i++) {
+                this.brackets[i] = new TaxBracket();
+            }
+        }
+    }
 
-		// โหลดข้อมูลที่บันทึกไว้ของปีปัจจุบัน (ถ้ามี)
-		loadFromJSON(selectedYear);
-	}
+    /**
+     * คลาสสำหรับเก็บข้อมูลช่วงภาษีแต่ละแถว
+     */
+    private static class TaxBracket {
+        private long minIncome = 0;                     // รายได้ต่ำสุด
+        private Long maxIncome = null;                  // รายได้สูงสุด (null สำหรับช่วงสุดท้าย)
+        private int taxRate = 0;                        // อัตราภาษี (เปอร์เซ็นต์)
+    }
 
-	// สร้างแถบบนของหน้าจอ (Badge Admin และปุ่ม Save)
-	private JPanel buildTopBar() {
-		JPanel panel = new JPanel(new BorderLayout());
-		panel.setBackground(new Color(126, 171, 194));
-		panel.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
+    /**
+     * Constructor - สร้างและแสดงหน้าต่างโปรแกรม
+     */
+    public AdminPanelUI() {
+        setupGlobalFont();                              // ตั้งค่าฟอนต์
+        createMainWindow();                             // สร้างหน้าต่างหลัก
+        loadAllDataFromFile();                          // โหลดข้อมูลจากไฟล์
+        loadDataForYear(currentSelectedYear);           // แสดงข้อมูลปีปัจจุบัน
+    }
 
-		JLabel adminBadge = new JLabel("Admin");
-		adminBadge.setFont(adminBadge.getFont().deriveFont(Font.BOLD, 24f));
-		adminBadge.setOpaque(true);
-		adminBadge.setBackground(new Color(255, 239, 204));
+    /**
+     * ตั้งค่าฟอนต์เริ่มต้นเป็น Tahoma สำหรับทั้งโปรแกรม
+     */
+    private void setupGlobalFont() {
+        java.util.Enumeration<?> keys = UIManager.getDefaults().keys();
+        while (keys.hasMoreElements()) {
+            Object key = keys.nextElement();
+            Object value = UIManager.get(key);
+            if (value instanceof FontUIResource) {
+                FontUIResource currentFont = (FontUIResource) value;
+                FontUIResource newFont = new FontUIResource(
+                    new Font("Tahoma", currentFont.getStyle(), currentFont.getSize())
+                );
+                UIManager.put(key, newFont);
+            }
+        }
+    }
 
-		JButton save = new JButton("Save");
-		save.setFocusable(false);
-		save.setFont(save.getFont().deriveFont(Font.BOLD, 24f));
-		save.setBackground(new Color(255, 239, 204));
+    /**
+     * สร้างหน้าต่างหลักและจัดการ layout
+     */
+    private void createMainWindow() {
+        mainWindow = new JFrame("Admin Panel - จัดการข้อมูลภาษี");
+        mainWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        mainWindow.setSize(1200, 720);
+        mainWindow.setLocationRelativeTo(null);         // วางหน้าต่างตรงกลางจอ
 
-		// เพิ่ม ActionListener สำหรับปุ่ม Save
-		save.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				saveToJSON();
-			}
-		});
+        // สร้าง layout หลัก
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        // เพิ่มส่วนต่างๆ เข้าไปใน layout
+        mainPanel.add(createTopBar(), BorderLayout.NORTH);        // แถบบน
+        mainPanel.add(createYearSidebar(), BorderLayout.WEST);    // แถบซ้าย (ปี)
+        mainPanel.add(createDataInputArea(), BorderLayout.CENTER); // พื้นที่กลาง (ฟอร์ม)
 
-		panel.add(adminBadge, BorderLayout.WEST);
-		panel.add(save, BorderLayout.EAST);
-		return panel;
-	}
+        mainWindow.setContentPane(mainPanel);
+        mainWindow.setVisible(true);
+    }
 
-	// สร้างแถบด้านซ้าย แสดงปีที่สามารถคลิกเลือกได้
-	private JPanel buildLeftSidebar() {
-		JPanel sidebar = new JPanel(new BorderLayout());
-		sidebar.setPreferredSize(new Dimension(260, 0));
-		sidebar.setBackground(new Color(232, 245, 252));
-		sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(180, 210, 225)));
+    /**
+     * สร้างแถบบนที่มี badge Admin และปุ่ม Save
+     */
+    private JPanel createTopBar() {
+        JPanel topBar = new JPanel(new BorderLayout());
+        topBar.setBackground(new Color(126, 171, 194));
+        topBar.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
 
-		JPanel yearsPanel = new JPanel();
-		yearsPanel.setLayout(new BoxLayout(yearsPanel, BoxLayout.Y_AXIS));
-		yearsPanel.setOpaque(false);
+        // สร้าง Admin badge
+        JLabel adminBadge = new JLabel("Admin");
+        adminBadge.setFont(adminBadge.getFont().deriveFont(Font.BOLD, 24f));
+        adminBadge.setOpaque(true);
+        adminBadge.setBackground(new Color(255, 239, 204));
 
-		int[] years = {2568, 2567, 2566, 2565, 2564, 2563, 2562};
-		for (int y : years) yearsPanel.add(createYearRow(y)); // loop สร้างแถว(ปี) จาก Array
+        // สร้างปุ่ม Save
+        JButton saveButton = new JButton("Save");
+        saveButton.setFocusable(false);
+        saveButton.setFont(saveButton.getFont().deriveFont(Font.BOLD, 24f));
+        saveButton.setBackground(new Color(255, 239, 204));
+        
+        // เพิ่ม event เมื่อกดปุ่ม Save
+        saveButton.addActionListener(e -> saveCurrentDataAndWriteToFile());
 
-		sidebar.add(yearsPanel, BorderLayout.CENTER);
-		return sidebar;
-	}
+        topBar.add(adminBadge, BorderLayout.WEST);
+        topBar.add(saveButton, BorderLayout.EAST);
+        return topBar;
+    }
 
-	// สร้าง 1 แถวสำหรับ 1 ปี
-	private JComponent createYearRow(int year) {
-		JPanel row = new JPanel(new BorderLayout());
-		row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 56));
-		row.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(180, 210, 225)));
-		row.setBackground(new Color(224, 238, 246));
+    /**
+     * สร้างแถบด้านซ้ายที่แสดงรายการปี
+     */
+    private JPanel createYearSidebar() {
+        JPanel sidebar = new JPanel(new BorderLayout());
+        sidebar.setPreferredSize(new Dimension(260, 0));
+        sidebar.setBackground(new Color(232, 245, 252));
+        sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(180, 210, 225)));
 
-		JButton yearBtn = new JButton(String.valueOf(year));
-		yearBtn.setHorizontalAlignment(SwingConstants.LEFT);
-		yearBtn.setContentAreaFilled(false);
-		yearBtn.setBorder(BorderFactory.createEmptyBorder(14, 16, 14, 10));
-		yearBtn.setFont(yearBtn.getFont().deriveFont(Font.BOLD, 18f));
-		yearBtn.setActionCommand(String.valueOf(year));
-		yearBtn.addActionListener(new java.awt.event.ActionListener() {
-			public void actionPerformed(java.awt.event.ActionEvent ev) { onSelectYear(year); }
-		});
+        // สร้างพื้นที่สำหรับรายการปี
+        JPanel yearsContainer = new JPanel();
+        yearsContainer.setLayout(new BoxLayout(yearsContainer, BoxLayout.Y_AXIS));
+        yearsContainer.setOpaque(false);
 
-		row.add(yearBtn, BorderLayout.CENTER);
-		return row;
-	}
+        // เพิ่มปีต่างๆ เข้าไป
+        int[] availableYears = {2568, 2567, 2566, 2565, 2564, 2563, 2562};
+        for (int year : availableYears) {
+            yearsContainer.add(createYearButton(year));
+        }
 
-	// ส่วนกลาง: หัวข้อใหญ่และฟอร์มช่วงเงินได้ + อัตราภาษี
-	private JPanel buildCenterPanel() {
-		JPanel center = new JPanel(new BorderLayout());
-		center.setBackground(new Color(245, 247, 249));
-		center.setBorder(BorderFactory.createEmptyBorder(16, 24, 16, 24));
+        sidebar.add(yearsContainer, BorderLayout.CENTER);
+        return sidebar;
+    }
 
-		JPanel titleWrap = new JPanel(new GridBagLayout());
-		titleWrap.setOpaque(false);
-		JLabel title = new JLabel("ช่วงภาษีแบบขั้นบันได ปี " + selectedYear);
-		title.setFont(title.getFont().deriveFont(Font.BOLD, 28f));
-		titleWrap.add(title);
+    /**
+     * สร้างปุ่มสำหรับแต่ละปี
+     */
+    private JComponent createYearButton(int year) {
+        JPanel yearRow = new JPanel(new BorderLayout());
+        yearRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 56));
+        yearRow.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(180, 210, 225)));
+        yearRow.setBackground(new Color(224, 238, 246));
 
-		center.add(titleWrap, BorderLayout.NORTH);
-		center.add(buildBracketGrid(), BorderLayout.CENTER);
-		return center;
-	}
+        JButton yearButton = new JButton(String.valueOf(year));
+        yearButton.setHorizontalAlignment(SwingConstants.LEFT);
+        yearButton.setContentAreaFilled(false);
+        yearButton.setBorder(BorderFactory.createEmptyBorder(14, 16, 14, 10));
+        yearButton.setFont(yearButton.getFont().deriveFont(Font.BOLD, 18f));
+        
+        // เพิ่ม event เมื่อคลิกเลือกปี
+        yearButton.addActionListener(e -> switchToYear(year));
 
-	// ตาราง 3 คอลัมน์หลัก: min — max | rate จำนวน BRACKET_ROWS แถว
-	private JPanel buildBracketGrid() {
-		JPanel grid = new JPanel(new GridBagLayout());
-		grid.setOpaque(false);
-		GridBagConstraints gbc = new GridBagConstraints();
-		gbc.insets = new Insets(8, 8, 8, 8);
-		gbc.fill = GridBagConstraints.HORIZONTAL;
+        yearRow.add(yearButton, BorderLayout.CENTER);
+        return yearRow;
+    }
 
-		gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.5;
-		grid.add(new JLabel("ช่วงเงินได้สุทธิ (บาท) เรียงจากน้อยไปมาก"), gbc);
-		gbc.gridx = 2; gbc.gridy = 0; gbc.weightx = 0.5;
-		grid.add(new JLabel(""), gbc);
-		gbc.gridx = 4; gbc.gridy = 0; gbc.weightx = 0.0;
-		grid.add(new JLabel("อัตราภาษี (%)"), gbc);
+    /**
+     * สร้างพื้นที่กลางสำหรับแสดงและกรอกข้อมูล
+     */
+    private JPanel createDataInputArea() {
+        JPanel centerArea = new JPanel(new BorderLayout());
+        centerArea.setBackground(new Color(245, 247, 249));
+        centerArea.setBorder(BorderFactory.createEmptyBorder(16, 24, 16, 24));
 
-		for (int i = 0; i < BRACKET_ROWS; i++) {
-			gbc.weightx = 0.5;
-			gbc.gridx = 0; gbc.gridy = i + 1;
-			minIncomeFields[i] = new JFormattedTextField(NumberFormat.getIntegerInstance());
-			grid.add(minIncomeFields[i], gbc);
+        // สร้างหัวข้อ
+        JPanel titleArea = new JPanel(new GridBagLayout());
+        titleArea.setOpaque(false);
+        JLabel titleLabel = new JLabel("ช่วงภาษีแบบขั้นบันได ปี " + currentSelectedYear);
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 28f));
+        titleArea.add(titleLabel);
 
-			if (i != BRACKET_ROWS - 1) {
-				gbc.gridx = 1; gbc.gridy = i + 1; gbc.weightx = 0;
-				grid.add(new JLabel("—", SwingConstants.CENTER), gbc);
+        centerArea.add(titleArea, BorderLayout.NORTH);
+        centerArea.add(createDataInputTable(), BorderLayout.CENTER);
+        return centerArea;
+    }
 
-				gbc.gridx = 2; gbc.gridy = i + 1; gbc.weightx = 0.5;
-				maxIncomeFields[i] = new JFormattedTextField(NumberFormat.getIntegerInstance());
-				grid.add(maxIncomeFields[i], gbc);
-			}
+    /**
+     * สร้างตารางสำหรับกรอกข้อมูล
+     */
+    private JPanel createDataInputTable() {
+        JPanel table = new JPanel(new GridBagLayout());
+        table.setOpaque(false);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
 
-			gbc.gridx = 4; gbc.gridy = i + 1; gbc.weightx = 0.25;
-			rateFields[i] = new JFormattedTextField(NumberFormat.getIntegerInstance());
-			grid.add(rateFields[i], gbc);
-		}
+        // สร้างหัวตาราง
+        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.5;
+        table.add(new JLabel("ช่วงเงินได้สุทธิ (บาท) (เรียงลำดับจากน้อยไปมาก)"), gbc);
+        gbc.gridx = 2; gbc.gridy = 0; gbc.weightx = 0.5;
+        table.add(new JLabel(""), gbc);
+        gbc.gridx = 4; gbc.gridy = 0; gbc.weightx = 0.0;
+        table.add(new JLabel("อัตราภาษี (%)"), gbc);
 
-		return grid;
-	}
+        // สร้างแถวข้อมูล
+        for (int rowIndex = 0; rowIndex < BRACKET_ROWS; rowIndex++) {
+            createTableRow(table, gbc, rowIndex);
+        }
 
-	// เมื่อคลิกเลือกปีทางซ้าย จะรีเฟรชหัวข้อและฟอร์มให้เป็นปีที่เลือก
-	private void onSelectYear(int year) {
-		selectedYear = year;
-		frame.getContentPane().removeAll();
-		JPanel root = new JPanel(new BorderLayout());
-		root.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-		root.add(buildTopBar(), BorderLayout.NORTH);
-		root.add(buildLeftSidebar(), BorderLayout.WEST);
-		root.add(buildCenterPanel(), BorderLayout.CENTER);
-		frame.setContentPane(root);
-		frame.revalidate();
-		frame.repaint();
+        return table;
+    }
 
-		// หลังจากสร้างฟอร์มใหม่แล้ว ให้โหลดข้อมูลของปีที่เลือก (ถ้ามี)
-		loadFromJSON(selectedYear);
-	}
+    /**
+     * สร้างแถวเดียวในตาราง
+     */
+    private void createTableRow(JPanel table, GridBagConstraints gbc, int rowIndex) {
+        // คอลัมน์ที่ 1: รายได้ต่ำสุด
+        gbc.weightx = 0.5;
+        gbc.gridx = 0; gbc.gridy = rowIndex + 1;
+        minIncomeInputs[rowIndex] = new JFormattedTextField(NumberFormat.getIntegerInstance());
+        table.add(minIncomeInputs[rowIndex], gbc);
 
-	// บันทึกข้อมูลเป็นไฟล์ JSON
-	private void saveToJSON() {
-		try {
-			// สร้างข้อมูล JSON แบบง่าย
-			StringBuilder json = new StringBuilder();
-			json.append("{\n");
-			json.append("  \"year\": ").append(selectedYear).append(",\n");
-			json.append("  \"taxBrackets\": [\n");
-			
-			for (int i = 0; i < BRACKET_ROWS; i++) {
-				json.append("    {\n");
-				
-				// ดึงค่า min income
-				String minIncome = "0";
-				if (minIncomeFields[i].getValue() != null) {
-					minIncome = minIncomeFields[i].getValue().toString().replace(",", "");
-				}
-				json.append("      \"minIncome\": ").append(minIncome).append(",\n");
-				
-				// ดึงค่า max income (แถวสุดท้ายจะไม่มี max)
-				if (i < BRACKET_ROWS - 1 && maxIncomeFields[i] != null) {
-					String maxIncome = "0";
-					if (maxIncomeFields[i].getValue() != null) {
-						maxIncome = maxIncomeFields[i].getValue().toString().replace(",", "");
-					}
-					json.append("      \"maxIncome\": ").append(maxIncome).append(",\n");
-				} else {
-					json.append("      \"maxIncome\": null,\n");
-				}
-				
-				// ดึงค่า rate
-				String rate = "0";
-				if (rateFields[i].getValue() != null) {
-					rate = rateFields[i].getValue().toString().replace(",", "");
-				}
-				json.append("      \"rate\": ").append(rate).append("\n");
-				
-				json.append("    }");
-				if (i < BRACKET_ROWS - 1) {
-					json.append(",");
-				}
-				json.append("\n");
-			}
-			
-			json.append("  ]\n");
-			json.append("}\n");
-			
-			// บันทึกไฟล์
-			String filename = "tax_brackets_" + selectedYear + ".json";
-			FileWriter writer = new FileWriter(filename);
-			writer.write(json.toString());
-			writer.close();
-			
-			// แสดงข้อความสำเร็จ
-			JOptionPane.showMessageDialog(frame, "บันทึกข้อมูลสำเร็จ!\nไฟล์: " + filename, "บันทึกสำเร็จ", JOptionPane.INFORMATION_MESSAGE);
-				
-		} catch (Exception e) {
-			// แสดงข้อความผิดพลาด
-			JOptionPane.showMessageDialog(frame, "เกิดข้อผิดพลาด: " + e.getMessage(), "ข้อผิดพลาด", JOptionPane.ERROR_MESSAGE);
-			e.printStackTrace();
-		}
-	}
+        // สำหรับแถวที่ไม่ใช่แถวสุดท้าย จะมีช่อง "ถึง" และรายได้สูงสุด
+        if (rowIndex != BRACKET_ROWS - 1) {
+            // เครื่องหมาย "—"
+            gbc.gridx = 1; gbc.gridy = rowIndex + 1; gbc.weightx = 0;
+            table.add(new JLabel("—", SwingConstants.CENTER), gbc);
 
-	// โหลดข้อมูลจากไฟล์ JSON และเติมลงในช่องกรอก
-	private void loadFromJSON(int year) {
-		String filename = "tax_brackets_" + year + ".json";
-		File file = new File(filename);
-		if (!file.exists()) {
-			return; // ไม่มีไฟล์ให้โหลด ก็ข้ามไป
-		}
+            // คอลัมน์ที่ 2: รายได้สูงสุด
+            gbc.gridx = 2; gbc.gridy = rowIndex + 1; gbc.weightx = 0.5;
+            maxIncomeInputs[rowIndex] = new JFormattedTextField(NumberFormat.getIntegerInstance());
+            table.add(maxIncomeInputs[rowIndex], gbc);
+        }
 
-		BufferedReader reader = null;
-		try {
-			reader = new BufferedReader(new FileReader(file));
-			String line;
-			int rowIndex = 0;
-			Long pendingMin = null;
-			Long pendingMax = null; // เป็น null สำหรับแถวสุดท้าย
-			Long pendingRate = null;
+        // คอลัมน์ที่ 3: อัตราภาษี
+        gbc.gridx = 4; gbc.gridy = rowIndex + 1; gbc.weightx = 0.25;
+        taxRateInputs[rowIndex] = new JFormattedTextField(NumberFormat.getIntegerInstance());
+        table.add(taxRateInputs[rowIndex], gbc);
+    }
 
-			while ((line = reader.readLine()) != null && rowIndex < BRACKET_ROWS) {
-				String trimmed = line.trim();
-				if (trimmed.startsWith("\"minIncome\"")) {
-					pendingMin = parseLongValue(trimmed);
-				} else if (trimmed.startsWith("\"maxIncome\"")) {
-					if (trimmed.contains("null")) {
-						pendingMax = null;
-					} else {
-						pendingMax = parseLongValue(trimmed);
-					}
-				} else if (trimmed.startsWith("\"rate\"")) {
-					pendingRate = parseLongValue(trimmed);
+    /**
+     * เปลี่ยนไปยังปีที่เลือก
+     */
+    private void switchToYear(int year) {
+        // บันทึกข้อมูลปีปัจจุบันก่อนเปลี่ยน
+        saveCurrentDataToMemory();
+        
+        // เปลี่ยนปี
+        currentSelectedYear = year;
+        
+        // สร้างหน้าจอใหม่
+        refreshUI();
+        
+        // โหลดข้อมูลปีใหม่
+        loadDataForYear(currentSelectedYear);
+    }
 
-					// ครบ 1 ชุดของแถวแล้ว ให้เติมค่าใส่ช่อง
-					if (pendingMin == null) pendingMin = 0L;
-					if (pendingRate == null) pendingRate = 0L;
+    /**
+     * รีเฟรช UI ทั้งหมด
+     */
+    private void refreshUI() {
+        mainWindow.getContentPane().removeAll();
+        
+        JPanel newMainPanel = new JPanel(new BorderLayout());
+        newMainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        newMainPanel.add(createTopBar(), BorderLayout.NORTH);
+        newMainPanel.add(createYearSidebar(), BorderLayout.WEST);
+        newMainPanel.add(createDataInputArea(), BorderLayout.CENTER);
+        
+        mainWindow.setContentPane(newMainPanel);
+        mainWindow.revalidate();
+        mainWindow.repaint();
+    }
 
-					if (rowIndex >= 0 && rowIndex < BRACKET_ROWS) {
-						if (minIncomeFields[rowIndex] != null) {
-							minIncomeFields[rowIndex].setValue(pendingMin);
-						}
-						// สำหรับแถวสุดท้ายจะไม่มี maxIncomeFields
-						if (rowIndex < BRACKET_ROWS - 1 && maxIncomeFields[rowIndex] != null) {
-							if (pendingMax == null) {
-								maxIncomeFields[rowIndex].setValue(null);
-							} else {
-								maxIncomeFields[rowIndex].setValue(pendingMax);
-							}
-						}
-						if (rateFields[rowIndex] != null) {
-							rateFields[rowIndex].setValue(pendingRate);
-						}
-					}
+    /**
+     * บันทึกข้อมูลจากช่องกรอกไปยังหน่วยความจำ
+     */
+    private void saveCurrentDataToMemory() {
+        // สร้างข้อมูลปีใหม่ถ้ายังไม่มี
+        if (!allYearsData.containsKey(currentSelectedYear)) {
+            allYearsData.put(currentSelectedYear, new YearTaxData(currentSelectedYear));
+        }
+        
+        YearTaxData yearData = allYearsData.get(currentSelectedYear);
+        
+        // บันทึกข้อมูลจากช่องกรอกแต่ละแถว
+        for (int i = 0; i < BRACKET_ROWS; i++) {
+            TaxBracket bracket = yearData.brackets[i];
+            
+            // บันทึกรายได้ต่ำสุด
+            bracket.minIncome = getValueFromField(minIncomeInputs[i], 0L);
+            
+            // บันทึกรายได้สูงสุด (ถ้าไม่ใช่แถวสุดท้าย)
+            if (i < BRACKET_ROWS - 1 && maxIncomeInputs[i] != null) {
+                Long maxValue = getValueFromField(maxIncomeInputs[i], null);
+                bracket.maxIncome = maxValue;
+            } else {
+                bracket.maxIncome = null; // แถวสุดท้ายไม่มีขีดจำกัดบน
+            }
+            
+            // บันทึกอัตราภาษี
+            bracket.taxRate = getValueFromField(taxRateInputs[i], 0L).intValue();
+        }
+    }
 
-					// เตรียมสำหรับชุดถัดไป
-					rowIndex++;
-					pendingMin = null;
-					pendingMax = null;
-					pendingRate = null;
-				}
-			}
-		} catch (Exception ex) {
-			// แสดงข้อความผิดพลาดแบบไม่รบกวนการใช้งานหลัก
-			System.err.println("โหลดไฟล์ไม่สำเร็จ: " + ex.getMessage());
-		} finally {
-			if (reader != null) {
-				try { reader.close(); } catch (IOException ignore) {}
-			}
-		}
-	}
+    /**
+     * ดึงค่าจากช่องกรอก แล้วแปลงเป็น Long
+     */
+    private Long getValueFromField(JFormattedTextField field, Long defaultValue) {
+        if (field == null || field.getValue() == null) {
+            return defaultValue;
+        }
+        
+        try {
+            String valueText = field.getValue().toString().replace(",", "");
+            return Long.parseLong(valueText);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
 
-	// แปลงค่าตัวเลขจากบรรทัดรูปแบบ "\"key\": 123,"
-	private Long parseLongValue(String jsonLine) {
-		// ตัดส่วนก่อน ':' แล้วเอาเฉพาะตัวเลขจนจบ (ไม่รวม comma)
-		int colon = jsonLine.indexOf(':');
-		if (colon == -1) return 0L;
-		String after = jsonLine.substring(colon + 1).trim();
-		// ตัด comma ท้ายถ้ามี
-		if (after.endsWith(",")) {
-			after = after.substring(0, after.length() - 1).trim();
-		}
-		try {
-			return Long.parseLong(after);
-		} catch (NumberFormatException e) {
-			return 0L;
-		}
-	}
+    /**
+     * โหลดข้อมูลของปีที่กำหนดมาแสดงในช่องกรอก
+     */
+    private void loadDataForYear(int year) {
+        YearTaxData yearData = allYearsData.get(year);
+        
+        // ถ้าไม่มีข้อมูลของปีนี้ ให้สร้างใหม่
+        if (yearData == null) {
+            yearData = new YearTaxData(year);
+            allYearsData.put(year, yearData);
+        }
+        
+        // เติมข้อมูลลงในช่องกรอก
+        for (int i = 0; i < BRACKET_ROWS; i++) {
+            TaxBracket bracket = yearData.brackets[i];
+            
+            // เติมรายได้ต่ำสุด
+            if (minIncomeInputs[i] != null) {
+                minIncomeInputs[i].setValue(bracket.minIncome);
+            }
+            
+            // เติมรายได้สูงสุด (ถ้าไม่ใช่แถวสุดท้าย)
+            if (i < BRACKET_ROWS - 1 && maxIncomeInputs[i] != null) {
+                maxIncomeInputs[i].setValue(bracket.maxIncome);
+            }
+            
+            // เติมอัตราภาษี
+            if (taxRateInputs[i] != null) {
+                taxRateInputs[i].setValue(bracket.taxRate);
+            }
+        }
+    }
 
-	// ตั้งค่าฟอนต์เริ่มต้นของ Swing ทุกคอมโพเนนต์
-	private static void setGlobalFont(String fontName) {
-		java.util.Enumeration<?> keys = UIManager.getDefaults().keys();
-		while (keys.hasMoreElements()) {
-			Object key = keys.nextElement();
-			Object value = UIManager.get(key);
-			if (value instanceof FontUIResource) {
-				FontUIResource f = (FontUIResource) value;
-				UIManager.put(key, new FontUIResource(new Font(fontName, f.getStyle(), f.getSize())));
-			}
-		}
-	}
+    /**
+     * บันทึกข้อมูลปัจจุบันและเขียนลงไฟล์
+     */
+    private void saveCurrentDataAndWriteToFile() {
+        try {
+            // บันทึกข้อมูลปัจจุบันไปยังหน่วยความจำก่อน
+            saveCurrentDataToMemory();
+            
+            // สร้าง JSON และเขียนลงไฟล์
+            writeAllDataToFile();
+            
+            // แสดงข้อความสำเร็จ
+            JOptionPane.showMessageDialog(
+                mainWindow, 
+                "บันทึกข้อมูลสำเร็จ!\nไฟล์: " + DATA_FILE, 
+                "บันทึกสำเร็จ", 
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            
+        } catch (Exception e) {
+            // แสดงข้อความผิดพลาด
+            JOptionPane.showMessageDialog(
+                mainWindow, 
+                "เกิดข้อผิดพลาด: " + e.getMessage(), 
+                "ข้อผิดพลาด", 
+                JOptionPane.ERROR_MESSAGE
+            );
+            e.printStackTrace();
+        }
+    }
 
-	public static void main(String[] args) {
-		new AdminPanelUI();
-	}
+    /**
+     * เขียนข้อมูลทุกปีลงไฟล์ JSON
+     */
+    private void writeAllDataToFile() throws IOException {
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        json.append("  \"allYearsData\": {\n");
+        
+        // เขียนข้อมูลแต่ละปี
+        int yearCount = 0;
+        for (Map.Entry<Integer, YearTaxData> entry : allYearsData.entrySet()) {
+            int year = entry.getKey();
+            YearTaxData yearData = entry.getValue();
+            
+            if (yearCount > 0) {
+                json.append(",\n");
+            }
+            
+            json.append("    \"").append(year).append("\": {\n");
+            json.append("      \"year\": ").append(year).append(",\n");
+            json.append("      \"taxBrackets\": [\n");
+            
+            // เขียนข้อมูลช่วงภาษีของปีนี้
+            for (int i = 0; i < BRACKET_ROWS; i++) {
+                TaxBracket bracket = yearData.brackets[i];
+                
+                json.append("        {\n");
+                json.append("          \"minIncome\": ").append(bracket.minIncome).append(",\n");
+                
+                if (bracket.maxIncome != null) {
+                    json.append("          \"maxIncome\": ").append(bracket.maxIncome).append(",\n");
+                } else {
+                    json.append("          \"maxIncome\": null,\n");
+                }
+                
+                json.append("          \"taxRate\": ").append(bracket.taxRate).append("\n");
+                json.append("        }");
+                
+                if (i < BRACKET_ROWS - 1) {
+                    json.append(",");
+                }
+                json.append("\n");
+            }
+            
+            json.append("      ]\n");
+            json.append("    }");
+            
+            yearCount++;
+        }
+        
+        json.append("\n  }\n");
+        json.append("}\n");
+        
+        // เขียนลงไฟล์
+        try (FileWriter writer = new FileWriter(DATA_FILE)) {
+            writer.write(json.toString());
+        }
+    }
+
+    /**
+     * โหลดข้อมูลทุกปีจากไฟล์
+     */
+    private void loadAllDataFromFile() {
+        File file = new File(DATA_FILE);
+        if (!file.exists()) {
+            System.out.println("ไม่พบไฟล์ข้อมูล จะเริ่มต้นด้วยข้อมูลว่าง");
+            return;
+        }
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            // อ่านไฟล์ทั้งหมด
+            StringBuilder content = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                content.append(line).append("\n");
+            }
+            
+            // แยกข้อมูลของแต่ละปี (วิธีง่ายๆ โดยการ parse ข้อความ)
+            parseJsonContent(content.toString());
+            
+        } catch (Exception e) {
+            System.err.println("เกิดข้อผิดพลาดในการโหลดไฟล์: " + e.getMessage());
+        }
+    }
+
+    /**
+     * แยกข้อมูล JSON
+     */
+    private void parseJsonContent(String jsonContent) {
+        // การหาข้อความ
+        String[] lines = jsonContent.split("\n");
+        
+        Integer currentYear = null;
+        int bracketIndex = 0;
+        YearTaxData currentYearData = null;
+        
+        for (String line : lines) {
+            String trimmed = line.trim();
+            
+            // หาปี
+            if (trimmed.startsWith("\"") && trimmed.contains("\":")) {
+                try {
+                    String yearStr = trimmed.substring(1, trimmed.indexOf("\"", 1));
+                    currentYear = Integer.parseInt(yearStr);
+                    currentYearData = new YearTaxData(currentYear);
+                    allYearsData.put(currentYear, currentYearData);
+                    bracketIndex = 0;
+                } catch (NumberFormatException e) {
+                    // ไม่ใช่ปี ข้าม
+                }
+            }
+            // หาข้อมูลในแต่ละ bracket
+            else if (currentYearData != null && bracketIndex < BRACKET_ROWS) {
+                if (trimmed.startsWith("\"minIncome\"")) {
+                    currentYearData.brackets[bracketIndex].minIncome = extractNumber(trimmed);
+                } else if (trimmed.startsWith("\"maxIncome\"")) {
+                    if (trimmed.contains("null")) {
+                        currentYearData.brackets[bracketIndex].maxIncome = null;
+                    } else {
+                        currentYearData.brackets[bracketIndex].maxIncome = extractNumber(trimmed);
+                    }
+                } else if (trimmed.startsWith("\"taxRate\"")) {
+                    currentYearData.brackets[bracketIndex].taxRate = (int) extractNumber(trimmed);
+                    bracketIndex++; // 1 bracket
+                }
+            }
+        }
+    }
+
+    /**
+     * ดึงตัวเลขจากบรรทัด JSON
+     */
+    private long extractNumber(String jsonLine) {
+        try {
+            int colonIndex = jsonLine.indexOf(':');
+            if (colonIndex == -1) return 0;
+            
+            String valueStr = jsonLine.substring(colonIndex + 1).trim();
+            if (valueStr.endsWith(",")) {
+                valueStr = valueStr.substring(0, valueStr.length() - 1).trim();
+            }
+            
+            return Long.parseLong(valueStr);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    public static void main(String[] args) {
+		
+        new AdminPanelUI();
+    }
 }
