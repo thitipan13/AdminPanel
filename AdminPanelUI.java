@@ -1,7 +1,6 @@
 import javax.swing.*;
 import javax.swing.plaf.FontUIResource;
 import java.awt.*;
-import java.awt.event.*;
 import java.text.*;
 import java.io.*;
 import java.util.*;
@@ -12,12 +11,12 @@ import java.util.*;
 public class AdminPanelUI {
 
     // ค่าคงที่สำหรับการตั้งค่า
-    private static final int BRACKET_ROWS = 8;           // จำนวนแถวในตารางภาษี
-    private static final String DATA_FILE = "tax_data.json";  // ชื่อไฟล์เก็บข้อมูล
+    private static final int BRACKET_ROWS = 8; // จำนวนแถวในตารางภาษี
+    private static final String DATA_FILE = "tax_data.csv"; // ชื่อไฟล์เก็บข้อมูล (CSV)
 
     // ตัวแปรสำหรับ UI หลัก
-    private JFrame mainWindow;                           // หน้าต่างหลัก
-    private int currentSelectedYear = 2568;              // ปีที่เลือกอยู่ในปัจจุบัน
+    private JFrame mainWindow; // หน้าต่างหลัก
+    private int currentSelectedYear = 2568; // ปีที่เลือกอยู่ในปัจจุบัน
     
     // ตัวแปรสำหรับช่องกรอกข้อมูลในตาราง
     private JFormattedTextField[] minIncomeInputs = new JFormattedTextField[BRACKET_ROWS];
@@ -31,11 +30,9 @@ public class AdminPanelUI {
      * คลาสสำหรับเก็บข้อมูลภาษีของแต่ละปี
      */
     private static class YearTaxData {
-        private int year;                               // ปี
-        private TaxBracket[] brackets;                  // ข้อมูลช่วงภาษี
+        private TaxBracket[] brackets; // ข้อมูลช่วงภาษี
 
         public YearTaxData(int year) {
-            this.year = year;
             this.brackets = new TaxBracket[BRACKET_ROWS];
             // สร้างช่วงภาษีเริ่มต้น (ค่าว่าง)
             for (int i = 0; i < BRACKET_ROWS; i++) {
@@ -48,19 +45,19 @@ public class AdminPanelUI {
      * คลาสสำหรับเก็บข้อมูลช่วงภาษีแต่ละแถว
      */
     private static class TaxBracket {
-        private Long minIncome = null;                  // รายได้ต่ำสุด
-        private Long maxIncome = null;                  // รายได้สูงสุด (null สำหรับช่วงสุดท้าย)
-        private Integer taxRate = null;                 // อัตราภาษี (เปอร์เซ็นต์)
+        private Long minIncome = null; // รายได้ต่ำสุด
+        private Long maxIncome = null; // รายได้สูงสุด (null สำหรับช่วงสุดท้าย)
+        private Integer taxRate = null; // อัตราภาษี (เปอร์เซ็นต์)
     }
 
     /**
      * Constructor - สร้างและแสดงหน้าต่างโปรแกรม
      */
     public AdminPanelUI() {
-        setupGlobalFont();                              // ตั้งค่าฟอนต์
-        loadAllDataFromFile();                          // โหลดข้อมูลจากไฟล์
-        createMainWindow();                             // สร้างหน้าต่างหลัก
-        loadDataForYear(currentSelectedYear);           // แสดงข้อมูลปีปัจจุบัน
+        setupGlobalFont(); // ตั้งค่าฟอนต์
+        loadAllDataFromFile(); // โหลดข้อมูลจากไฟล์
+        createMainWindow(); // สร้างหน้าต่างหลัก
+        loadDataForYear(currentSelectedYear); // แสดงข้อมูลปีปัจจุบัน
     }
 
     /**
@@ -88,15 +85,15 @@ public class AdminPanelUI {
         mainWindow = new JFrame("Admin Panel - จัดการข้อมูลภาษี");
         mainWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         mainWindow.setSize(1200, 720);
-        mainWindow.setLocationRelativeTo(null);         // วางหน้าต่างตรงกลางจอ
+        mainWindow.setLocationRelativeTo(null); // วางหน้าต่างตรงกลางจอ
 
         // สร้าง layout หลัก
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
         // เพิ่มส่วนต่างๆ เข้าไปใน layout
-        mainPanel.add(createTopBar(), BorderLayout.NORTH);        // แถบบน
-        mainPanel.add(createYearSidebar(), BorderLayout.WEST);    // แถบซ้าย (ปี)
+        mainPanel.add(createTopBar(), BorderLayout.NORTH); // แถบบน
+        mainPanel.add(createYearSidebar(), BorderLayout.WEST); // แถบซ้าย (ปี)
         mainPanel.add(createDataInputArea(), BorderLayout.CENTER); // พื้นที่กลาง (ฟอร์ม)
 
         mainWindow.setContentPane(mainPanel);
@@ -403,8 +400,8 @@ public class AdminPanelUI {
             // บันทึกข้อมูลปัจจุบันไปยังหน่วยความจำก่อน
             saveCurrentDataToMemory();
             
-            // สร้าง JSON และเขียนลงไฟล์
-            writeAllDataToFile();
+            // เขียนลงไฟล์ CSV
+            writeAllDataToCsv();
             
             // แสดงข้อความสำเร็จ
             JOptionPane.showMessageDialog(
@@ -427,62 +424,29 @@ public class AdminPanelUI {
     }
 
     /**
-     * เขียนข้อมูลทุกปีลงไฟล์ JSON
+     * เขียนข้อมูลทุกปีลงไฟล์ CSV
      */
-    private void writeAllDataToFile() throws IOException {
-        StringBuilder json = new StringBuilder();
-        json.append("{\n");
-        json.append("  \"allYearsData\": {\n");
-        
-        // เขียนข้อมูลแต่ละปี
-        int yearCount = 0;
+    private void writeAllDataToCsv() throws IOException {
+        StringBuilder csv = new StringBuilder();
+        // header
+        csv.append("year,rowIndex,minIncome,maxIncome,taxRate\n");
         for (Map.Entry<Integer, YearTaxData> entry : allYearsData.entrySet()) {
             int year = entry.getKey();
             YearTaxData yearData = entry.getValue();
-            
-            if (yearCount > 0) {
-                json.append(",\n");
-            }
-            
-            json.append("    \"").append(year).append("\": {\n");
-            json.append("      \"year\": ").append(year).append(",\n");
-            json.append("      \"taxBrackets\": [\n");
-            
-            // เขียนข้อมูลช่วงภาษีของปีนี้
             for (int i = 0; i < BRACKET_ROWS; i++) {
                 TaxBracket bracket = yearData.brackets[i];
-                
-                json.append("        {\n");
-                json.append("          \"minIncome\": ").append(bracket.minIncome).append(",\n");
-                
-                if (bracket.maxIncome != null) {
-                    json.append("          \"maxIncome\": ").append(bracket.maxIncome).append(",\n");
-                } else {
-                    json.append("          \"maxIncome\": null,\n");
-                }
-                
-                json.append("          \"taxRate\": ").append(bracket.taxRate).append("\n");
-                json.append("        }");
-                
-                if (i < BRACKET_ROWS - 1) {
-                    json.append(",");
-                }
-                json.append("\n");
+                csv.append(year).append(",")
+                   .append(i).append(",")
+                   .append(bracket.minIncome == null ? "" : bracket.minIncome.toString()).append(",")
+                   .append(bracket.maxIncome == null ? "" : bracket.maxIncome.toString()).append(",")
+                   .append(bracket.taxRate == null ? "" : bracket.taxRate.toString())
+                   .append("\n");
             }
-            
-            json.append("      ]\n");
-            json.append("    }");
-            
-            yearCount++;
         }
-        
-        json.append("\n  }\n");
-        json.append("}\n");
-        
-        // เขียนลงไฟล์
         try (FileWriter writer = new FileWriter(DATA_FILE)) {
-            writer.write(json.toString());
+            writer.write(csv.toString());
         }
+        System.out.println("Data saved to CSV successfully: " + DATA_FILE);
     }
 
     /**
@@ -496,19 +460,10 @@ public class AdminPanelUI {
         }
 
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            // อ่านไฟล์ทั้งหมด
-            StringBuilder content = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                content.append(line).append("\n");
-            }
-            
-            System.out.println("Loading data from file..."); // debug output
-            
-            // แยกข้อมูลของแต่ละปี
-            parseJsonContent(content.toString());
-            
-            System.out.println("Loaded data for " + allYearsData.size() + " years"); // debug output
+            // อ่าน CSV ทั้งหมด
+            System.out.println("==== เริ่มโหลดข้อมูลจากไฟล์ CSV ====");
+            parseCsvContent(reader);
+            System.out.println("==== โหลดข้อมูล CSV สำเร็จ: " + allYearsData.size() + " ปี ====");
             
         } catch (Exception e) {
             System.err.println("เกิดข้อผิดพลาดในการโหลดไฟล์: " + e.getMessage());
@@ -517,75 +472,34 @@ public class AdminPanelUI {
     }
 
     /**
-     * แยกข้อมูล JSON
+     * แปลง CSV เป็นข้อมูลในหน่วยความจำ
+     * รูปแบบ: year,rowIndex,minIncome,maxIncome,taxRate
      */
-    private void parseJsonContent(String jsonContent) {
-        // การหาข้อความ
-        String[] lines = jsonContent.split("\n");
-        
-        Integer currentYear = null;
-        int bracketIndex = 0;
-        YearTaxData currentYearData = null;
-        
-        for (String line : lines) {
-            String trimmed = line.trim();
-            
-            // หาปี
-            if (trimmed.startsWith("\"") && trimmed.contains("\":")) {
-                try {
-                    String yearStr = trimmed.substring(1, trimmed.indexOf("\"", 1));
-                    currentYear = Integer.parseInt(yearStr);
-                    currentYearData = new YearTaxData(currentYear);
-                    allYearsData.put(currentYear, currentYearData);
-                    bracketIndex = 0;
-                } catch (NumberFormatException e) {
-                    // ไม่ใช่ปี ข้าม
-                }
+    private void parseCsvContent(BufferedReader reader) throws IOException {
+        String line = reader.readLine(); // header
+        while ((line = reader.readLine()) != null) {
+            if (line.trim().isEmpty()) continue;
+            String[] parts = line.split(",", -1);
+            if (parts.length < 5) continue;
+            int year = Integer.parseInt(parts[0].trim());
+            int rowIndex = Integer.parseInt(parts[1].trim());
+            Long minIncome = parts[2].trim().isEmpty() ? null : Long.parseLong(parts[2].trim());
+            Long maxIncome = parts[3].trim().isEmpty() ? null : Long.parseLong(parts[3].trim());
+            Integer taxRate = parts[4].trim().isEmpty() ? null : Integer.parseInt(parts[4].trim());
+
+            YearTaxData yearData = allYearsData.get(year);
+            if (yearData == null) {
+                yearData = new YearTaxData(year);
+                allYearsData.put(year, yearData);
             }
-            // หาข้อมูลในแต่ละ bracket
-            else if (currentYearData != null && bracketIndex < BRACKET_ROWS) {
-                if (trimmed.startsWith("\"minIncome\"")) {
-                    currentYearData.brackets[bracketIndex].minIncome = extractNumber(trimmed);
-                } else if (trimmed.startsWith("\"maxIncome\"")) {
-                    if (trimmed.contains("null")) {
-                        currentYearData.brackets[bracketIndex].maxIncome = null;
-                    } else {
-                        currentYearData.brackets[bracketIndex].maxIncome = extractNumber(trimmed);
-                    }
-                } else if (trimmed.startsWith("\"taxRate\"")) {
-                    currentYearData.brackets[bracketIndex].taxRate = (int) extractNumber(trimmed);
-                    bracketIndex++; // 1 bracket
-                }
+            if (rowIndex >= 0 && rowIndex < BRACKET_ROWS) {
+                yearData.brackets[rowIndex].minIncome = minIncome;
+                yearData.brackets[rowIndex].maxIncome = maxIncome;
+                yearData.brackets[rowIndex].taxRate = taxRate;
             }
         }
     }
 
-    /**
-     * ดึงตัวเลขจากบรรทัด JSON
-     */
-    private long extractNumber(String jsonLine) {
-        try {
-            int colonIndex = jsonLine.indexOf(':');
-            if (colonIndex == -1) return 0;
-            
-            String valueStr = jsonLine.substring(colonIndex + 1).trim();
-            
-            // ลบ comma ท้ายบรรทัด
-            if (valueStr.endsWith(",")) {
-                valueStr = valueStr.substring(0, valueStr.length() - 1).trim();
-            }
-            
-            // ถ้าเป็น null ให้คืนค่า 0
-            if (valueStr.equals("null")) {
-                return 0;
-            }
-            
-            return Long.parseLong(valueStr);
-        } catch (NumberFormatException e) {
-            System.err.println("Error extracting number from: " + jsonLine);
-            return 0;
-        }
-    }
 
     public static void main(String[] args) {
 		
