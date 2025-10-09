@@ -48,9 +48,9 @@ public class AdminPanelUI {
      * คลาสสำหรับเก็บข้อมูลช่วงภาษีแต่ละแถว
      */
     private static class TaxBracket {
-        private long minIncome = 0;                     // รายได้ต่ำสุด
+        private Long minIncome = null;                  // รายได้ต่ำสุด
         private Long maxIncome = null;                  // รายได้สูงสุด (null สำหรับช่วงสุดท้าย)
-        private int taxRate = 0;                        // อัตราภาษี (เปอร์เซ็นต์)
+        private Integer taxRate = null;                 // อัตราภาษี (เปอร์เซ็นต์)
     }
 
     /**
@@ -58,8 +58,8 @@ public class AdminPanelUI {
      */
     public AdminPanelUI() {
         setupGlobalFont();                              // ตั้งค่าฟอนต์
-        createMainWindow();                             // สร้างหน้าต่างหลัก
         loadAllDataFromFile();                          // โหลดข้อมูลจากไฟล์
+        createMainWindow();                             // สร้างหน้าต่างหลัก
         loadDataForYear(currentSelectedYear);           // แสดงข้อมูลปีปัจจุบัน
     }
 
@@ -209,7 +209,7 @@ public class AdminPanelUI {
 
         // สร้างหัวตาราง
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.5;
-        table.add(new JLabel("ช่วงเงินได้สุทธิ (บาท) (เรียงลำดับจากน้อยไปมาก)"), gbc);
+        table.add(new JLabel("ช่วงเงินได้สุทธิ (บาท) - (เรียงลำดับจากน้อยไปมาก)"), gbc);
         gbc.gridx = 2; gbc.gridy = 0; gbc.weightx = 0.5;
         table.add(new JLabel(""), gbc);
         gbc.gridx = 4; gbc.gridy = 0; gbc.weightx = 0.0;
@@ -301,7 +301,7 @@ public class AdminPanelUI {
             TaxBracket bracket = yearData.brackets[i];
             
             // บันทึกรายได้ต่ำสุด
-            bracket.minIncome = getValueFromField(minIncomeInputs[i], 0L);
+            bracket.minIncome = getValueFromField(minIncomeInputs[i], null);
             
             // บันทึกรายได้สูงสุด (ถ้าไม่ใช่แถวสุดท้าย)
             if (i < BRACKET_ROWS - 1 && maxIncomeInputs[i] != null) {
@@ -312,7 +312,8 @@ public class AdminPanelUI {
             }
             
             // บันทึกอัตราภาษี
-            bracket.taxRate = getValueFromField(taxRateInputs[i], 0L).intValue();
+            Long taxValue = getValueFromField(taxRateInputs[i], null);
+            bracket.taxRate = (taxValue != null) ? taxValue.intValue() : null;
         }
     }
 
@@ -325,7 +326,10 @@ public class AdminPanelUI {
         }
         
         try {
-            String valueText = field.getValue().toString().replace(",", "");
+            String valueText = field.getValue().toString().replace(",", "").trim();
+            if (valueText.isEmpty()) {
+                return defaultValue;
+            }
             return Long.parseLong(valueText);
         } catch (NumberFormatException e) {
             return defaultValue;
@@ -336,12 +340,17 @@ public class AdminPanelUI {
      * โหลดข้อมูลของปีที่กำหนดมาแสดงในช่องกรอก
      */
     private void loadDataForYear(int year) {
+        System.out.println("Loading data for year: " + year); // debug output
+        
         YearTaxData yearData = allYearsData.get(year);
         
         // ถ้าไม่มีข้อมูลของปีนี้ ให้สร้างใหม่
         if (yearData == null) {
+            System.out.println("No data found for year " + year + ", creating new data");
             yearData = new YearTaxData(year);
             allYearsData.put(year, yearData);
+        } else {
+            System.out.println("Found existing data for year " + year);
         }
         
         // เติมข้อมูลลงในช่องกรอก
@@ -350,18 +359,39 @@ public class AdminPanelUI {
             
             // เติมรายได้ต่ำสุด
             if (minIncomeInputs[i] != null) {
-                minIncomeInputs[i].setValue(bracket.minIncome);
+                if (bracket.minIncome != null) {
+                    minIncomeInputs[i].setValue(bracket.minIncome);
+                    System.out.println("Set minIncome[" + i + "] = " + bracket.minIncome);
+                } else {
+                    minIncomeInputs[i].setValue(null);
+                }
             }
             
             // เติมรายได้สูงสุด (ถ้าไม่ใช่แถวสุดท้าย)
             if (i < BRACKET_ROWS - 1 && maxIncomeInputs[i] != null) {
-                maxIncomeInputs[i].setValue(bracket.maxIncome);
+                if (bracket.maxIncome != null) {
+                    maxIncomeInputs[i].setValue(bracket.maxIncome);
+                    System.out.println("Set maxIncome[" + i + "] = " + bracket.maxIncome);
+                } else {
+                    maxIncomeInputs[i].setValue(null);
+                }
             }
             
             // เติมอัตราภาษี
             if (taxRateInputs[i] != null) {
-                taxRateInputs[i].setValue(bracket.taxRate);
+                if (bracket.taxRate != null) {
+                    taxRateInputs[i].setValue(bracket.taxRate);
+                    System.out.println("Set taxRate[" + i + "] = " + bracket.taxRate);
+                } else {
+                    taxRateInputs[i].setValue(null);
+                }
             }
+        }
+        
+        // รีเฟรช UI
+        if (mainWindow != null) {
+            mainWindow.revalidate();
+            mainWindow.repaint();
         }
     }
 
@@ -473,11 +503,16 @@ public class AdminPanelUI {
                 content.append(line).append("\n");
             }
             
+            System.out.println("Loading data from file..."); // debug output
+            
             // แยกข้อมูลของแต่ละปี
             parseJsonContent(content.toString());
             
+            System.out.println("Loaded data for " + allYearsData.size() + " years"); // debug output
+            
         } catch (Exception e) {
             System.err.println("เกิดข้อผิดพลาดในการโหลดไฟล์: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -534,12 +569,20 @@ public class AdminPanelUI {
             if (colonIndex == -1) return 0;
             
             String valueStr = jsonLine.substring(colonIndex + 1).trim();
+            
+            // ลบ comma ท้ายบรรทัด
             if (valueStr.endsWith(",")) {
                 valueStr = valueStr.substring(0, valueStr.length() - 1).trim();
             }
             
+            // ถ้าเป็น null ให้คืนค่า 0
+            if (valueStr.equals("null")) {
+                return 0;
+            }
+            
             return Long.parseLong(valueStr);
         } catch (NumberFormatException e) {
+            System.err.println("Error extracting number from: " + jsonLine);
             return 0;
         }
     }
