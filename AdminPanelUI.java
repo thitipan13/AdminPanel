@@ -108,11 +108,18 @@ public class AdminPanelUI {
         topBar.setBackground(new Color(126, 171, 194));
         topBar.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
 
-        // สร้าง Admin badge
-        JLabel adminBadge = new JLabel("Admin");
-        adminBadge.setFont(adminBadge.getFont().deriveFont(Font.BOLD, 24f));
-        adminBadge.setOpaque(true);
-        adminBadge.setBackground(new Color(255, 239, 204));
+        // สร้างปุ่ม Logout
+        JButton logoutButton = new JButton("Logout");
+        logoutButton.setFocusable(false);
+        logoutButton.setFont(logoutButton.getFont().deriveFont(Font.BOLD, 24f));
+        logoutButton.setBackground(new Color(255, 239, 204));
+        logoutButton.addActionListener(e -> {
+            System.out.println("Logout clicked: " + e.getActionCommand());
+            if (mainWindow != null) {
+                mainWindow.dispose();
+            }
+            new Login();
+        });
 
         // สร้างปุ่ม Save
         JButton saveButton = new JButton("Save");
@@ -120,10 +127,13 @@ public class AdminPanelUI {
         saveButton.setFont(saveButton.getFont().deriveFont(Font.BOLD, 24f));
         saveButton.setBackground(new Color(255, 239, 204));
         
-        // เพิ่ม event เมื่อกดปุ่ม Save
-        saveButton.addActionListener(e -> saveCurrentDataAndWriteToFile());
+        // เพิ่ม event เมื่อกดปุ่ม Save (ใช้ e เพื่อเลี่ยง unused warning)
+        saveButton.addActionListener(e -> {
+            System.out.println("Save clicked: " + e.getActionCommand());
+            saveCurrentDataAndWriteToFile();
+        });
 
-        topBar.add(adminBadge, BorderLayout.WEST);
+        topBar.add(logoutButton, BorderLayout.WEST);
         topBar.add(saveButton, BorderLayout.EAST);
         return topBar;
     }
@@ -167,8 +177,11 @@ public class AdminPanelUI {
         yearButton.setBorder(BorderFactory.createEmptyBorder(14, 16, 14, 10));
         yearButton.setFont(yearButton.getFont().deriveFont(Font.BOLD, 18f));
         
-        // เพิ่ม event เมื่อคลิกเลือกปี
-        yearButton.addActionListener(e -> switchToYear(year));
+        // เพิ่ม event เมื่อคลิกเลือกปี (ใช้ e เพื่อเลี่ยง unused warning)
+        yearButton.addActionListener(e -> {
+            System.out.println("Year clicked: " + year + " cmd=" + e.getActionCommand());
+            switchToYear(year);
+        });
 
         yearRow.add(yearButton, BorderLayout.CENTER);
         return yearRow;
