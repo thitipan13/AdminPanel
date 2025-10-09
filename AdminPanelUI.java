@@ -473,7 +473,7 @@ public class AdminPanelUI {
                 content.append(line).append("\n");
             }
             
-            // แยกข้อมูลของแต่ละปี (วิธีง่ายๆ โดยการ parse ข้อความ)
+            // แยกข้อมูลของแต่ละปี
             parseJsonContent(content.toString());
             
         } catch (Exception e) {
@@ -548,4 +548,5 @@ public class AdminPanelUI {
 		
         new AdminPanelUI();
     }
+
 }
