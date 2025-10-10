@@ -1,9 +1,12 @@
 import javax.swing.*;
 import javax.swing.plaf.FontUIResource;
+import javax.swing.JTextField;
 import java.awt.*;
+import java.awt.event.*;
 import java.text.*;
 import java.io.*;
 import java.util.*;
+
 
 /**
  * AdminPanelUI - หน้าต่างแอดมินสำหรับจัดการข้อมูลภาษีแบบขั้นบันได
@@ -13,10 +16,13 @@ public class AdminPanelUI {
     // ค่าคงที่สำหรับการตั้งค่า
     private static final int BRACKET_ROWS = 8; // จำนวนแถวในตารางภาษี
     private static final String DATA_FILE = "tax_data.csv"; // ชื่อไฟล์เก็บข้อมูล (CSV)
+    private static final int[] DEFAULT_YEARS = {2568, 2567, 2566, 2565, 2564, 2563, 2562};
 
     // ตัวแปรสำหรับ UI หลัก
     private JFrame mainWindow; // หน้าต่างหลัก
     private int currentSelectedYear = 2568; // ปีที่เลือกอยู่ในปัจจุบัน
+    private JTextField yearInputField; // ช่องกรอกปีที่ต้องการเพิ่ม
+    private JPanel yearsContainer; // ตัวแปรสำหรับเก็บรายการปีที่มีอยู่
     
     // ตัวแปรสำหรับช่องกรอกข้อมูลในตาราง
     private JFormattedTextField[] minIncomeInputs = new JFormattedTextField[BRACKET_ROWS];
@@ -25,6 +31,7 @@ public class AdminPanelUI {
 
     // ตัวแปรสำหรับเก็บข้อมูลทุกปี (เก็บในหน่วยความจำ)
     private Map<Integer, YearTaxData> allYearsData = new HashMap<>();
+
 
     /**
      * คลาสสำหรับเก็บข้อมูลภาษีของแต่ละปี
@@ -118,7 +125,7 @@ public class AdminPanelUI {
             if (mainWindow != null) {
                 mainWindow.dispose();
             }
-            new Login();
+            //new Login();
         });
 
         // สร้างปุ่ม Save
@@ -127,10 +134,12 @@ public class AdminPanelUI {
         saveButton.setFont(saveButton.getFont().deriveFont(Font.BOLD, 24f));
         saveButton.setBackground(new Color(255, 239, 204));
         
-        // เพิ่ม event เมื่อกดปุ่ม Save (ใช้ e เพื่อเลี่ยง unused warning)
-        saveButton.addActionListener(e -> {
-            System.out.println("Save clicked: " + e.getActionCommand());
-            saveCurrentDataAndWriteToFile();
+        // เพิ่ม event เมื่อกดปุ่ม Save
+        saveButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                saveCurrentDataAndWriteToFile();
+            }
         });
 
         topBar.add(logoutButton, BorderLayout.WEST);
@@ -148,18 +157,154 @@ public class AdminPanelUI {
         sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(180, 210, 225)));
 
         // สร้างพื้นที่สำหรับรายการปี
-        JPanel yearsContainer = new JPanel();
+        yearsContainer = new JPanel();
         yearsContainer.setLayout(new BoxLayout(yearsContainer, BoxLayout.Y_AXIS));
         yearsContainer.setOpaque(false);
 
-        // เพิ่มปีต่างๆ เข้าไป
-        int[] availableYears = {2568, 2567, 2566, 2565, 2564, 2563, 2562};
-        for (int year : availableYears) {
+        // เพิ่มปีต่างๆ เข้าไป (เรียงจากมากไปน้อย) โดยรวมปีเริ่มต้นกับปีที่เคยเพิ่มไว้
+        Set<Integer> yearsToShow = new TreeSet<>(Collections.reverseOrder());
+        for (int y : DEFAULT_YEARS) {
+            yearsToShow.add(y);
+        }
+        yearsToShow.addAll(allYearsData.keySet());
+
+        // แสดงปุ่มปีเรียงจากมากไปน้อย
+        for (int year : yearsToShow) {
             yearsContainer.add(createYearButton(year));
         }
 
         sidebar.add(yearsContainer, BorderLayout.CENTER);
+        sidebar.add(createAddYearPanel(), BorderLayout.SOUTH); // เพิ่มปีที่ด้านล่างซ้าย
         return sidebar;
+    }
+
+    /**
+     * สร้าง panel เพิ่มปี
+     */
+    private JPanel createAddYearPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(new Color(224, 238, 246));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(180, 210, 225)),
+            BorderFactory.createEmptyBorder(10, 10, 10, 10)
+        ));
+
+        // สร้าง label
+        JLabel label = new JLabel("เพิ่มปี:");
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 14f));
+
+        // สร้างช่องกรอกปี
+        yearInputField = new JTextField(8);
+        yearInputField.setFont(yearInputField.getFont().deriveFont(14f));
+        yearInputField.setText(""); // ค่าเริ่มต้นเป็นค่าว่าง
+
+        // สร้างปุ่มเพิ่ม
+        JButton addButton = new JButton("เพิ่ม");
+        addButton.setFont(addButton.getFont().deriveFont(Font.BOLD, 14f));
+        addButton.setBackground(new Color(126, 171, 194));
+        addButton.setForeground(Color.WHITE);
+        addButton.setFocusPainted(false);
+
+        // เพิ่ม action listener สำหรับปุ่มเพิ่ม
+        addButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                addNewYear();
+            }
+        });
+        
+        // เพิ่ม action listener สำหรับกด Enter ในช่องกรอก
+        yearInputField.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                addNewYear();
+            }
+        });
+        
+        // จัด layout
+        JPanel inputPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        inputPanel.setOpaque(false);
+        inputPanel.add(label);
+        inputPanel.add(yearInputField);
+        inputPanel.add(addButton);
+        
+        panel.add(inputPanel, BorderLayout.CENTER);
+        
+        return panel;
+    }
+
+    /**
+     * เพิ่มปีใหม่
+     */
+    private void addNewYear() {
+        String inputText = yearInputField.getText().trim();
+        
+        // ตรวจสอบว่ากรอกข้อมูลหรือไม่
+        if (inputText.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                mainWindow,
+                "กรุณากรอกปีที่ต้องการเพิ่ม",
+                "ข้อมูลไม่ครบ",
+                JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+        
+        try {
+            int newYear = Integer.parseInt(inputText);
+            
+            // ตรวจสอบว่าปีนี้มีอยู่แล้วหรือไม่
+            if (allYearsData.containsKey(newYear)) {
+                JOptionPane.showMessageDialog(
+                    mainWindow,
+                    "ปี " + newYear + " มีอยู่ในระบบแล้ว",
+                    "ปีซ้ำ",
+                    JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+            
+            // ตรวจสอบว่าปีอยู่ในช่วงที่เหมาะสม (เช่น 2500-2600)
+            if (newYear < 2500 || newYear > 2600) {
+                JOptionPane.showMessageDialog(
+                    mainWindow,
+                    "กรุณากรอกปีในช่วง 2500-2600",
+                    "ปีไม่ถูกต้อง",
+                    JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+            
+            // เพิ่มปีใหม่
+            allYearsData.put(newYear, new YearTaxData(newYear));
+            
+            // เพิ่มปุ่มปีใหม่ใน sidebar
+            yearsContainer.add(createYearButton(newYear), 0); // เพิ่มที่ตำแหน่งแรก
+            yearsContainer.revalidate();
+            yearsContainer.repaint();
+            
+            // เคลียร์ช่องกรอก
+            yearInputField.setText("");
+            
+            // แสดงข้อความสำเร็จ
+            JOptionPane.showMessageDialog(
+                mainWindow,
+                "เพิ่มปี " + newYear + " สำเร็จ",
+                "สำเร็จ",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            
+            // เปลี่ยนไปแสดงปีที่เพิ่งเพิ่ม
+            switchToYear(newYear);
+            
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(
+                mainWindow,
+                "กรุณากรอกเฉพาะตัวเลขเท่านั้น",
+                "รูปแบบไม่ถูกต้อง",
+                JOptionPane.ERROR_MESSAGE
+            );
+        }
     }
 
     /**
@@ -178,9 +323,11 @@ public class AdminPanelUI {
         yearButton.setFont(yearButton.getFont().deriveFont(Font.BOLD, 18f));
         
         // เพิ่ม event เมื่อคลิกเลือกปี (ใช้ e เพื่อเลี่ยง unused warning)
-        yearButton.addActionListener(e -> {
-            System.out.println("Year clicked: " + year + " cmd=" + e.getActionCommand());
-            switchToYear(year);
+        yearButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                switchToYear(year);
+            }
         });
 
         yearRow.add(yearButton, BorderLayout.CENTER);
