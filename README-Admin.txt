@@ -23,7 +23,7 @@ Imports ที่ใช้
 โครงสร้างคลาส (Class Design)
 - AdminPanelUI (public):
   - หน้าที่: สร้าง UI, แสดง/แก้ไขข้อมูล, จัดการสถานะปีที่เลือก, อ่าน/เขียน CSV
-  - ส่วน UI หลัก: แถบบน (Logout/Save), แถบซ้าย (รายการปี/เพิ่มปี/เปลี่ยนชื่อ/ลบปี), พื้นที่กลาง (ตารางปรับจำนวนแถวได้)
+- ส่วน UI หลัก: แถบบน (Logout/Save), แถบซ้าย (รายการปี/เพิ่มปี/ลบปี), พื้นที่กลาง (ตารางปรับจำนวนแถวได้)
   - สถานะสำคัญ: currentSelectedYear, currentRowComponents (กลุ่มคอมโพเนนต์ของแต่ละแถว), allYearsData, isDirty
   - ค่าคงที่: DATA_FILE="tax_data.csv", DEFAULT_YEARS={2568..2562}, DEFAULT_INITIAL_ROWS=8
 - YearTaxData (private static):
@@ -35,7 +35,6 @@ Imports ที่ใช้
 1) รันโปรแกรม (main ใน AdminPanelUI.java)
 2) เลือกปีจากแถบซ้าย หรือเพิ่มปีใหม่ (จำกัดช่วง 2500–2600 และห้ามซ้ำ)
 3) จัดการปี:
-   - เปลี่ยนชื่อปี: ปุ่ม "เปลี่ยนชื่อ" ที่รายการปี (ตรวจสอบซ้ำ/ช่วงปี)
    - ลบปี: ปุ่ม "ลบ" ที่รายการปี พร้อม Dialog ยืนยัน (จะเลือกปีถัดไปให้อัตโนมัติ)
 4) กรอกข้อมูลช่วงภาษีในพื้นที่กลาง:
    - แถวท้ายสุดจะไม่มีช่องรายได้สูงสุด (หมายถึงไม่จำกัดบน)
@@ -96,7 +95,7 @@ Imports ที่ใช้
   - `createYearSidebar()`: สร้างส่วนรายการปีและส่วนเพิ่มปี
   - `createAddYearPanel()`: แสดง `yearInputField` และปุ่ม “เพิ่ม”
   - `addNewYear()`: ตรวจค่าที่กรอก, เช็กช่วงปี 2500–2600, เช็กปีซ้ำ, เพิ่มปีใหม่ลง `allYearsData`, เพิ่มปุ่มปีใน Sidebar และสลับไปปีนั้น
-  - `createYearButton(int year)`: สร้างแถวปีพร้อมปุ่ม “เปลี่ยนชื่อ” และ “ลบ”
+- `createYearButton(int year)`: สร้างแถวปีพร้อมปุ่ม “ลบ”
   - `switchToYear(int year)`: ถ้ามี unsaved changes จะถามก่อน จากนั้นสลับปีและ `refreshUI()`
   - `refreshUI()`: สร้างคอนเทนต์ใหม่ของหน้าต่าง (TopBar/Sidebar/Center) แล้ว revalidate/repaint
 
@@ -129,7 +128,7 @@ Imports ที่ใช้
 - `getOrCreateYearData(int)`: ดึงข้อมูลปี ถ้าไม่มีให้สร้างใหม่และเก็บก่อนส่งกลับ
 
 การตรวจสอบ/พฤติกรรมสำคัญ (Validation & Behavior)
-- ช่วงปีเพิ่ม/เปลี่ยนชื่อ: จำกัด 2500–2600 และห้ามซ้ำกับปีที่มีอยู่
+- ช่วงปีเพิ่ม: จำกัด 2500–2600 และห้ามซ้ำกับปีที่มีอยู่
 - แถวสุดท้ายของช่วงภาษี: `maxIncome` เป็น `null` เพื่อบอกว่าไม่มีขีดจำกัดบน
 - Unsaved changes (`isDirty`): เปลี่ยนเป็น true เมื่อแก้ไขค่าใดๆ; มี Dialog เตือนเมื่อสลับปี/ออก/ปิด ถ้ายังไม่ Save
 
@@ -143,19 +142,10 @@ Imports ที่ใช้
 =================================================
 
 1) Auto-commas in number fields
-- ใช้ `JFormattedTextField` คู่กับ `NumberFormatter` และ `NumberFormat.getIntegerInstance()` เพื่อให้แสดงคอมมาและรับเฉพาะตัวเลข
+- ใช้ `JFormattedTextField(NumberFormat.getIntegerInstance())` เพื่อให้แสดงคอมมากลุ่มหลักพันและรับเฉพาะตัวเลข
 
 private static JFormattedTextField createIntegerField() {
-    NumberFormat integerFormat = NumberFormat.getIntegerInstance();
-    integerFormat.setGroupingUsed(true); // เปิดคอมมากลุ่มหลักพัน
-
-    NumberFormatter formatter = new NumberFormatter(integerFormat);
-    formatter.setValueClass(Long.class);         // เก็บเป็น Long
-    formatter.setAllowsInvalid(false);           // ไม่ให้พิมพ์อักขระที่ไม่ใช่ตัวเลข
-    formatter.setCommitsOnValidEdit(true);       // คอมมิตค่าเมื่อแก้ไขถูกต้อง
-
-    JFormattedTextField field = new JFormattedTextField(formatter);
-    field.setFocusLostBehavior(JFormattedTextField.COMMIT_OR_REVERT);
+    JFormattedTextField field = new JFormattedTextField(NumberFormat.getIntegerInstance());
     field.setHorizontalAlignment(SwingConstants.RIGHT);
     return field;
 }
@@ -206,19 +196,24 @@ private void parseCsvContent(BufferedReader reader) throws IOException {
     String line = reader.readLine(); // ข้ามบรรทัดหัวคอลัมน์
     while ((line = reader.readLine()) != null) {
         if (line.trim().isEmpty()) continue;
-        String[] parts = line.split(",");
+        String[] parts = line.split(",", -1);
+        if (parts.length < 5) continue;
         int year = Integer.parseInt(parts[0].trim());
         int rowIndex = Integer.parseInt(parts[1].trim());
         Long minIncome = parts[2].trim().isEmpty() ? null : Long.parseLong(parts[2].trim());
-        String maxStr = parts[3].trim();
-        Long maxIncome = (maxStr.isEmpty() || maxStr.equalsIgnoreCase("null")) ? null : Long.parseLong(maxStr);
+        Long maxIncome = parts[3].trim().isEmpty() ? null : Long.parseLong(parts[3].trim());
         Integer taxRate = parts[4].trim().isEmpty() ? null : Integer.parseInt(parts[4].trim());
 
-        YearTaxData data = getOrCreateYearData(year);
-        while (data.brackets.size() <= rowIndex) data.brackets.add(new TaxBracket());
-        TaxBracket b = data.brackets.get(rowIndex);
-        b.minIncome = minIncome;
-        b.maxIncome = maxIncome;
-        b.taxRate = taxRate;
+        YearTaxData yearData = allYearsData.get(year);
+        if (yearData == null) {
+            yearData = new YearTaxData(year);
+            allYearsData.put(year, yearData);
+        }
+        while (yearData.brackets.size() <= rowIndex) {
+            yearData.brackets.add(new TaxBracket());
+        }
+        yearData.brackets.get(rowIndex).minIncome = minIncome;
+        yearData.brackets.get(rowIndex).maxIncome = maxIncome;
+        yearData.brackets.get(rowIndex).taxRate = taxRate;
     }
 }

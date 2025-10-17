@@ -336,42 +336,11 @@ public class AdminPanelUI {
         // ปุ่มจัดการปี: เปลี่ยนชื่อ/ลบ
         JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 10));
         actionsPanel.setOpaque(false);
-        JButton renameButton = new JButton("เปลี่ยนชื่อ");
-        renameButton.setMargin(new Insets(4, 8, 4, 8));
-        renameButton.setFocusable(false);
         JButton deleteButton = new JButton("ลบ");
         deleteButton.setMargin(new Insets(4, 8, 4, 8));
         deleteButton.setFocusable(false);
 
-        renameButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String input = JOptionPane.showInputDialog(mainWindow, "แก้ไขปี:", String.valueOf(year));
-                if (input == null) return; // ยกเลิก
-                input = input.trim();
-                if (input.isEmpty()) return;
-                try {
-                    int newYear = Integer.parseInt(input);
-                    if (!isValidYear(newYear)) {
-                        showWarn("กรุณากรอกปีในช่วง 2500-2600", "ปีไม่ถูกต้อง");
-                        return;
-                    }
-                    if (newYear == year) return;
-                    if (isDuplicateYear(newYear)) {
-                        showWarn("ปี " + newYear + " มีอยู่แล้ว", "ปีซ้ำ");
-                        return;
-                    }
-                    YearTaxData data = allYearsData.remove(year);
-                    allYearsData.put(newYear, data);
-                    if (currentSelectedYear == year) {
-                        currentSelectedYear = newYear;
-                    }
-                    refreshUI();
-                } catch (NumberFormatException ex) {
-                    showError("กรุณากรอกตัวเลขปีที่ถูกต้อง", "รูปแบบไม่ถูกต้อง");
-                }
-            }
-        });
+        
 
         deleteButton.addActionListener(new ActionListener() {
             @Override
@@ -391,7 +360,6 @@ public class AdminPanelUI {
             }
         });
 
-        actionsPanel.add(renameButton);
         actionsPanel.add(deleteButton);
         yearRow.add(actionsPanel, BorderLayout.EAST);
         return yearRow;
